@@ -1,0 +1,16 @@
+# environment.yml  (portable spec)
+name: nlpenv
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.10
+  - numpy
+  - scikit-learn
+  - transformers
+  - tokenizers
+  - sentence-transformers
+  - nltk
+  - pytorch          # CPU/MPS/MKL will resolve per platform; no CUDA
+  - jupyterlab
+  - ipykernel

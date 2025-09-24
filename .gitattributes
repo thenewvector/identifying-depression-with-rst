@@ -13,7 +13,7 @@
 *.h    text eol=lf
 *.md   text eol=lf
 
-# Windows-specific scripts (if you have any)
+# Windows-specific scripts
 *.bat  text eol=crlf
 *.cmd  text eol=crlf
 

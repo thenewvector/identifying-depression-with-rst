@@ -14,6 +14,7 @@ venv/
 # Data / outputs
 data/
 extras/
+temp/
 *.log
 *.tmp
 
