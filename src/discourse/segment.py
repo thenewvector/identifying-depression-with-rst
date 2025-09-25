@@ -300,7 +300,7 @@ def _get_sentence_embeddings(sentences: List[str], batch_size: int = 32) -> np.n
     _require_model()
 
     if _BACKEND == "st":
-        # Sentence Transformers does pooling & normalization on it's own (Yay!)
+        # Sentence Transformers does pooling & normalization on their own (Yay!)
         embs = _ST_MODEL.encode(
             sentences,
             batch_size=max(32, batch_size),
