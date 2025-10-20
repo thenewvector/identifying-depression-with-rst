@@ -8,13 +8,18 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel
 import re
+from typing import List
 
 _BACKEND: str = "st"          # "hf" or "st"
 _TOKENIZER = None             # used for token counting in both backends
 _MODEL = None                 # HF model (hf backend)
 _ST_MODEL = None              # SentenceTransformer model (st backend)
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_MAX_TOKENS = 512 # our token budget, so that the cunks can be used by the RST Parser downstream
+_MAX_TOKENS = 500 # our token budget;
+# had to bump it down from 512 to a saf*er* 500, because the tokenizer of the RST parser apparently tokenizes differently
+# and some resulting segments, though below the 512 budget with this tokenizer here (from the "sberbank-ai/sbert_large_nlu_ru" model),
+# exceeded the 512 limit downstream when processed by the RST parser.
+
 _MIN_TOKENS = 200 # the minimum of tokens a chunk can be split into
 _WINDOW = 1 # the size of the moving window in sentences to be compared to the previous chunk of _MAX_PREVIOUS size in sentences
 _MAX_PREVIOUS = 3
@@ -234,9 +239,6 @@ def _split_word_by_token_limit(word: str, limit: int) -> list[str]:
         start += len(piece)
     return parts
 
-import re
-from typing import List
-
 def _split_long_sentence(sentence: str, limit: int) -> List[str]:
     """
     Split a single overlong sentence into sub-chunks that each fit `limit`
@@ -318,7 +320,7 @@ def _get_sentence_embeddings(sentences: List[str], batch_size: int = 32) -> np.n
             return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=512
+            max_length=_MAX_TOKENS
         ).to(_DEVICE)
 
         outputs = _MODEL(**inputs)                      # last_hidden_state: (B, T, H)
