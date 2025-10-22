@@ -19,7 +19,6 @@ _MAX_TOKENS = 500 # our token budget;
 # had to bump it down from 512 to a saf*er* 500, because the tokenizer of the RST parser apparently tokenizes differently
 # and some resulting segments, though below the 512 budget with this tokenizer here (from the "sberbank-ai/sbert_large_nlu_ru" model),
 # exceeded the 512 limit downstream when processed by the RST parser.
-
 _MIN_TOKENS = 200 # the minimum of tokens a chunk can be split into
 _WINDOW = 1 # the size of the moving window in sentences to be compared to the previous chunk of _MAX_PREVIOUS size in sentences
 _MAX_PREVIOUS = 3
