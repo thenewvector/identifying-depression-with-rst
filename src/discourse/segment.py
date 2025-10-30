@@ -15,10 +15,10 @@ _TOKENIZER = None             # used for token counting in both backends
 _MODEL = None                 # HF model (hf backend)
 _ST_MODEL = None              # SentenceTransformer model (st backend)
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_MAX_TOKENS = 380 # our token budget;
-# had to bump it down from 512 to a saf*er* 480, because the tokenizer of the RST parser apparently tokenizes differently
-# and some resulting segments, though below the 512 budget with this tokenizer here (from the "sberbank-ai/sbert_large_nlu_ru" model),
-# exceeded the 512 limit downstream when processed by the RST parser.
+_MAX_TOKENS = 320 # our token budget;
+# Eventually, had to bump it down from 512 to a saf*er* 360, because the tokenizer of the RST parser apparently tokenizes differently
+# and some resulting segments, though below the 512 budget with the tokenizer in this module (from the "sberbank-ai/sbert_large_nlu_ru" model),
+# exceeded the 512 limit downstream when processed by the RST parser. Through trial and error, landed on 360.
 _MIN_TOKENS = 200 # the minimum of tokens a chunk can be split into
 _WINDOW = 1 # the size of the moving window in sentences to be compared to the previous chunk of _MAX_PREVIOUS size in sentences
 _MAX_PREVIOUS = 3
