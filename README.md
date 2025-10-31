@@ -33,7 +33,7 @@ Our segmentation pipeline works as follows:
 
 >\* Update 1: had to bump it down from 512 to a saf*er* 500, because the tokenizer of the RST parser apparently tokenizes differently and some resulting segments, though below the 512 budget with this tokenizer here (from the "sberbank-ai/sbert_large_nlu_ru" model), exceeded the 512 limit downstream when processed by the RST parser.
 
->\* Update 2: had to lower the token bugget a few more times to a safe 360, which results in segments that don't cause the parser downstream to panic (over spans exceeding the 512-token limit)
+>\* Update 2: had to lower the token bugget a few more times to a safe 320, which results in segments that don't cause the parser downstream to panic (over spans exceeding the 512-token limit)
 
 * Semantic splitting: Longer passages are recursively split at low-similarity valleys (based on sentence embeddings), so that resulting chunks are both under the token limit and semantically coherent.
 * Output: A list of text segments, each safely processable by downstream RST parsers.

@@ -1,12 +1,15 @@
-# === Imports & Constants
+# === Imports & Constants ===
 from collections import Counter
+import math
 
 _PARSER = None
 
+# === PARSING ===
+
 # === Require pareser ===
 def _require_parser() -> None:
-    if _PARSER == None:
-        raise RuntimeError("Parser hnot initialized")
+    if _PARSER is None:
+        raise RuntimeError("Parser not initialized")
 
 # -----------------------
 # Public: init the parser
@@ -17,44 +20,91 @@ def init_parser(model: str='tchewik/isanlp_rst_v3', version: str='gumrrg') -> No
     from isanlp_rst.parser import Parser
     _PARSER = Parser(hf_model_name=model, hf_model_version=version)
 
+
+# === A helper to 'normalize' all documents to be list items (just in case)
+
+# By default, the code expects the text either as one solid chunk or as two or more chunks
+# in case the text has been segmented in the previous phase (segmentation)
+
+def _as_segments(x):
+    # normalize each item in corpus to a list[str] for cases where the structure of the corpus may be like
+    # ["text1", ["seg1_of_text2", "seg2_of_text2"], "text3", ... ]
+    # this is just an extra precaution
+    
+    if isinstance(x, str):
+        return [x]
+    return [s.strip() for s in x if isinstance(s, str) and s.strip()]
+
+# === A helper to 'normalize' the texts just in case
+import re, unicodedata
+
+def _normalize_for_parser(s: str) -> str:
+    s = s.replace("\u00A0", " ")        # NBSP -> space
+    s = s.replace("\u200b", "")         # zero-width space
+    s = s.replace("\ufeff", "")         # BOM
+    s = re.sub(r"\r\n?", "\n", s)       # CRLF/CR -> LF
+    s = unicodedata.normalize("NFC", s) # canonical compose
+    return s.strip()
+
+# ================================
+# Public: run the whole corpus through the rst parser
+# ================================
+
+def parse_corpus(corpus: list) -> tuple[list[list], list[dict]]:
+    _require_parser()
+    parsed_corpus, errors = [], []
+    for di, doc in enumerate(corpus):
+        segments = _as_segments(doc)
+        parsed_segments = []
+        for si, seg in enumerate(segments):
+            try:
+                print(f"processing doc:{di}, segment:{si}", flush=True)
+                parsed_segments.append(_PARSER(_normalize_for_parser(seg)))
+            except Exception as e:
+                errors.append({"doc_index": di, "seg_index": si, "error": str(e)})
+                parsed_segments.append(None)
+        parsed_corpus.append(parsed_segments)
+    return parsed_corpus, errors
+
+# === EXTRACTION ====
+
+# === Basic helper to extract EDUs ===
 def _extract_edus(node):
-    if node.left is None and node.right is None:
-        return [node.text.strip()] if node.text else []
-    
+    # leaf?
+    if getattr(node, 'left', None) is None and getattr(node, 'right', None) is None:
+        txt = getattr(node, 'text', None)
+        return [txt.strip()] if isinstance(txt, str) and txt.strip() else []
     edus = []
-    
-    if node.left is not None:
+    if getattr(node, 'left', None) is not None:
         edus += _extract_edus(node.left)
-    if node.right is not None:
+    if getattr(node, 'right', None) is not None:
         edus += _extract_edus(node.right)
     return edus
 
-# ===Main function to extract the features
+# === Main helper function to extract RST features ===
 
 def _extract_rst_features(tree):
     relation_counter = Counter()
     nuclearity_counter = Counter()
 
-    def walk(node, depth=1):
-        if node.left is None and node.right is None:
-            return 1  # it's a leaf
+    def walk(node):
+        # leaf
+        if getattr(node, 'left', None) is None and getattr(node, 'right', None) is None:
+            return 1
+        rel = getattr(node, 'relation', None)
+        nuc = getattr(node, 'nuclearity', None)
+        if rel: relation_counter[rel] += 1
+        if nuc: nuclearity_counter[nuc] += 1
 
-        relation_counter[node.relation] += 1
-        nuclearity_counter[node.nuclearity] += 1
-
-        left_depth = walk(node.left, depth + 1) if node.left else 0
-        right_depth = walk(node.right, depth + 1) if node.right else 0
-
-        return max(left_depth, right_depth) + 1
+        ld = walk(node.left)  if getattr(node, 'left',  None) is not None else 0
+        rd = walk(node.right) if getattr(node, 'right', None) is not None else 0
+        return max(ld, rd) + 1
 
     tree_depth = walk(tree)
     edus = _extract_edus(tree)
-    num_edus = sum(1 for _ in edus)
-
-    total_relations = sum(relation_counter.values())
-    relation_proportions = {
-        k: v / total_relations for k, v in relation_counter.items()
-    } if total_relations > 0 else {}
+    num_edus = len(edus)
+    total_rel = sum(relation_counter.values())
+    relation_proportions = {k: v / total_rel for k, v in relation_counter.items()} if total_rel else {}
 
     return {
         'tree_depth': tree_depth,
@@ -67,8 +117,10 @@ def _extract_rst_features(tree):
 
 # === A helper function to merge all the features for the texts that had to be segmented
 
-def _merge_rst_features(feature_list):
-    # Initialize merged structures
+def _merge_rst_features(feature_list, *, 
+                        merge_strategy: str = "balanced", 
+                        link_label: str = "link", 
+                        link_nuclearity: str = "NN"):
     total_chunks = len(feature_list)
     merged_relation_counts = Counter()
     merged_nuclearity_patterns = Counter()
@@ -76,20 +128,32 @@ def _merge_rst_features(feature_list):
     total_edus = 0
     all_edus = []
 
-    for features in feature_list:
-        merged_relation_counts += Counter(features['relation_counts'])
-        merged_nuclearity_patterns += Counter(features['nuclearity_patterns'])
-        max_depth = max(max_depth, features['tree_depth'])
-        total_edus += features['num_edus']
-        all_edus.extend(features['edus'])
+    for f in feature_list:
+        merged_relation_counts += Counter(f['relation_counts'])
+        merged_nuclearity_patterns += Counter(f['nuclearity_patterns'])
+        max_depth = max(max_depth, f['tree_depth'])
+        total_edus += f['num_edus']
+        all_edus.extend(f['edus'])
 
-    total_relations = sum(merged_relation_counts.values())
-    relation_proportions = {
-        k: v / total_relations for k, v in merged_relation_counts.items()
-    } if total_relations > 0 else {}
+    # how many binary merges to connect k roots?
+    merges = max(total_chunks - 1, 0)
+    if merge_strategy == "balanced":
+        added_depth = int(math.ceil(math.log2(total_chunks))) if total_chunks > 1 else 0
+    elif merge_strategy == "chain":
+        added_depth = merges
+    else:
+        added_depth = 0  # "none"
+
+    # add synthetic inter-segment relations (link, NN) → k-1
+    if merges > 0:
+        merged_relation_counts[link_label] += merges
+        merged_nuclearity_patterns[link_nuclearity] += merges
+
+    total_rel = sum(merged_relation_counts.values())
+    relation_proportions = {k: v / total_rel for k, v in merged_relation_counts.items()} if total_rel else {}
 
     return {
-        'tree_depth': max_depth + (total_chunks - 1),  # simulate merges
+        'tree_depth': max_depth + added_depth,
         'num_edus': total_edus,
         'relation_counts': dict(merged_relation_counts),
         'relation_proportions': relation_proportions,
@@ -97,85 +161,37 @@ def _merge_rst_features(feature_list):
         'edus': all_edus,
     }
 
-def _count_relations(rst_features_segment):
-    relation_counter = Counter()
-    for item in rst_features_segment:
-        relation_counter.update(item["relation_counts"])
-
-    return relation_counter.most_common()
-
 # -----------------------
-# Public: Main Pipline function to process the whole corpus and extract the features
+# Public: Main Pipline function
+# to process the whole corpus and extract all the features
 # -----------------------
 
-def extract_all_rst_features(corpus: list[str]):
+def extract_all_rst_features(parsed_corpus: list[list]):
+    # parser not actually needed here, but harmless
+    _require_parser()
+
     all_features = []
-    parsed_corpus = []
 
-    for i in corpus:
-        if len(i) > 1:
-            interim = [_PARSER(f) for f in i]
-            parsed_corpus.append(interim)
+    for doc in parsed_corpus:
+        # doc is always a list of segment results (even if len==1)
+        seg_results = [seg for seg in doc if isinstance(seg, dict) and seg.get('rst')]
+        if not seg_results:
+            continue  # or append a sentinel
+
+        per_seg_feats = []
+        for seg in seg_results:
+            tree = seg['rst'][0]
+            per_seg_feats.append(_extract_rst_features(tree))
+
+        if len(per_seg_feats) == 1:
+            all_features.append(per_seg_feats[0])
         else:
-            interim = _PARSER(" ".join(i))
-            parsed_corpus.append(interim)
-
-
-    for item in parsed_corpus:
-        if isinstance(item, dict):  # unsplit, single text
-            tree = item['rst'][0]
-            features = _extract_rst_features(tree)
-            all_features.append(features)
-
-        elif isinstance(item, list):  # split, multiple segments
-            segment_features = []
-            for segment in item:
-                tree = segment['rst'][0]
-                segment_features.append(_extract_rst_features(tree))
-            combined = _merge_rst_features(segment_features)
-            all_features.append(combined)
-
-        else:
-            raise ValueError("Unrecognized format in parsed_corpus")
-
-    all_relations = set(k for item in all_features for k in item["relation_counts"])
-
+            all_features.append(_merge_rst_features(
+                per_seg_feats,
+                merge_strategy="balanced",   # or "chain" if you prefer worst-case
+                link_label="link",
+                link_nuclearity="NN"
+            ))
     return all_features
-
-
-# === Transform the diagnoses (now stored as real labels in the 'diagnoses' variable) into ML appropriate labels
-
-from sklearn.preprocessing import LabelEncoder
-
-encoder = LabelEncoder()
-y_encoded = encoder.fit_transform(diagnoses)
-
-rst_features_dep = []
-rst_features_ok = []
-
-for i in range(len(rst_features)):
-    if y_encoded[i] == 0:
-        rst_features_dep.append(rst_features[i])
-    else:
-        rst_features_ok.append(rst_features[i])
-
-relation_counts_dep = count_relations(rst_features_dep)
-relation_counts_ok = count_relations(rst_features_ok)
-
-def convert_abs_rel_counts(relation_counts):
-    total = 0
-    
-    relative_rels = []
-    for item in relation_counts:
-        total += int(item[1])
-    
-    for item in relation_counts:
-        interim_rels = (item[0], item[1]/total)
-        relative_rels.append(interim_rels)
-    return relative_rels
-
-relative_relation_counts_dep = convert_abs_rel_counts(relation_counts_dep)
-relative_relation_counts_ok = convert_abs_rel_counts(relation_counts_ok)
-
-causal_rel_props_dep = [item['relation_proportions'].get("causal", 0.0) for item in rst_features_dep]
-causal_rel_props_ok = [item['relation_proportions'].get("causal", 0.0) for item in rst_features_ok]
+        
+# === FOLLOW-UP ===
