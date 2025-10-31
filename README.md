@@ -53,7 +53,7 @@ Experimentation, configuration, and tweaking are coordinated from /notebooks/seg
 
 ## Next Steps
 ### Working Right Now (in the dev branch)
-- [x] Prep a very basic pipeline (in a notebook) to run RST parsing on (all) the segmented texts in the corpus/corpora.
+- [x] Prep a very basic pipeline (in a notebook) to run RST parsing on (all) the segmented texts in the corpus/corpora. (This is now finally done without the pareser panicking over some segments being over the 512-limit the parser's tokenizer uses; now on to building a complete module for parsing and extracting the relevant RST features for further analysis)
 - [ ] Complete the module extracting all the RST features to be used for analysis downstream (relations, directionality, EDU counts) and run the parser using the public functions of the module.
 - [ ] Extract all the RST features from the essays in the corpus/corpora.
 
