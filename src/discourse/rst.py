@@ -116,7 +116,6 @@ def _extract_rst_features(tree):
     }
 
 # === A helper function to merge all the features for the texts that had to be segmented
-
 def _merge_rst_features(feature_list, *, 
                         merge_strategy: str = "balanced", 
                         link_label: str = "link", 
@@ -167,9 +166,7 @@ def _merge_rst_features(feature_list, *,
 # -----------------------
 
 def extract_all_rst_features(parsed_corpus: list[list]):
-    # parser not actually needed here, but harmless
-    _require_parser()
-
+    
     all_features = []
 
     for doc in parsed_corpus:
@@ -192,6 +189,7 @@ def extract_all_rst_features(parsed_corpus: list[list]):
                 link_label="link",
                 link_nuclearity="NN"
             ))
-    return all_features
+    all_relations = set(k for item in all_features for k in item["relation_counts"])
+    return all_features, all_relations
         
 # === FOLLOW-UP ===
