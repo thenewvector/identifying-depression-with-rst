@@ -118,7 +118,7 @@ def _extract_rst_features(tree):
 # === A helper function to merge all the features for the texts that had to be segmented
 def _merge_rst_features(feature_list, *, 
                         merge_strategy: str = "balanced", 
-                        link_label: str = "link", 
+                        link_label: str = "joint", 
                         link_nuclearity: str = "NN"):
     total_chunks = len(feature_list)
     merged_relation_counts = Counter()
@@ -143,7 +143,7 @@ def _merge_rst_features(feature_list, *,
     else:
         added_depth = 0  # "none"
 
-    # add synthetic inter-segment relations (link, NN) → k-1
+    # add synthetic inter-segment relations (joint, NN) → k-1
     if merges > 0:
         merged_relation_counts[link_label] += merges
         merged_nuclearity_patterns[link_nuclearity] += merges
@@ -186,7 +186,7 @@ def extract_all_rst_features(parsed_corpus: list[list]):
             all_features.append(_merge_rst_features(
                 per_seg_feats,
                 merge_strategy="balanced",   # or "chain" if you prefer worst-case
-                link_label="link",
+                link_label="joint",
                 link_nuclearity="NN"
             ))
     all_relations = set(k for item in all_features for k in item["relation_counts"])
