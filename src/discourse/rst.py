@@ -1,6 +1,8 @@
 # === Imports & Constants ===
-from collections import Counter
 import math
+import warnings
+from collections import Counter
+from typing import List, Dict, Any, Tuple
 
 _PARSER = None
 
@@ -14,7 +16,7 @@ def _require_parser() -> None:
 # -----------------------
 # Public: init the parser
 # -----------------------
-def init_parser(model: str='tchewik/isanlp_rst_v3', version: str='gumrrg') -> None:
+def init_parser(model: str='tchewik/isanlp_rst_v3', version: str='rstreebank') -> None:
     global _PARSER
     
     from isanlp_rst.parser import Parser
@@ -29,6 +31,7 @@ def init_parser(model: str='tchewik/isanlp_rst_v3', version: str='gumrrg') -> No
 def _as_segments(x):
     # normalize each item in corpus to a list[str] for cases where the structure of the corpus may be like
     # ["text1", ["seg1_of_text2", "seg2_of_text2"], "text3", ... ]
+    # or to cover the cases of both segmented and non-sgmented documents in a coprus
     # this is just an extra precaution
     
     if isinstance(x, str):
@@ -115,12 +118,54 @@ def _extract_rst_features(tree):
         'edus': edus,
     }
 
-# === A helper function to merge all the features for the texts that had to be segmented
-def _merge_rst_features(feature_list, *, 
-                        merge_strategy: str = "balanced", 
-                        link_label: str = "joint", 
-                        link_nuclearity: str = "NN"):
-    total_chunks = len(feature_list)
+# === A helper function to merge all the features for the texts in case these have been segmented
+# === This is a jerry-rigged solution, as it were, whereby the relation between the segments is *assumed* to be "joint" and NN
+def _merge_rst_features(
+    feature_list: List[Dict[str, Any]],
+    *,
+    merge_strategy: str = "balanced",
+    link_label: str = "joint",
+    link_nuclearity: str = "NN"
+):
+    """
+    LEGACY / EXPERIMENTAL — DO NOT USE with the official IsaNLP RST parser in normal mode.
+
+    The IsaNLP RST parser is designed to return ONE full-document tree per document
+    (it handles long texts internally via sliding windows). If you parsed a document
+    correctly, you should NOT need to “merge” segment trees.
+
+    This helper exists ONLY for legacy scenarios where a document was *incorrectly*
+    split and parsed segment-by-segment. It stitches per-segment feature dicts by:
+      - Summing relation / nuclearity counts;
+      - Adding (k-1) synthetic inter-segment relations (default: link_label='joint', NN);
+      - Approximating depth growth: 
+          * 'balanced'  -> added_depth = ceil(log2(k))
+          * 'chain'     -> added_depth = k - 1
+          * 'none'      -> added_depth = 0
+
+    ⚠️ The added 'joint/NN' relations and depth adjustments are synthetic assumptions.
+       Use ONLY for quick diagnostics; NOT for training, publication, or final analysis.
+
+    Parameters
+    ----------
+    feature_list : list of per-segment feature dicts (from _extract_rst_features)
+    merge_strategy : 'balanced' | 'chain' | 'none'
+    link_label : label to count for synthetic inter-segment links
+    link_nuclearity : nuclearity to count for synthetic inter-segment links
+
+    Returns
+    -------
+    dict : merged feature dict (approximate).
+    """
+    k = len(feature_list)
+    if k > 1:
+        warnings.warn(
+            "Using _merge_rst_features on multiple segments: this creates synthetic "
+            f"'{link_label}/{link_nuclearity}' links and approximate depth. Prefer parsing "
+            "the whole document once with the official parser.", UserWarning
+        )
+
+    total_chunks = k
     merged_relation_counts = Counter()
     merged_nuclearity_patterns = Counter()
     max_depth = 0
@@ -134,16 +179,14 @@ def _merge_rst_features(feature_list, *,
         total_edus += f['num_edus']
         all_edus.extend(f['edus'])
 
-    # how many binary merges to connect k roots?
     merges = max(total_chunks - 1, 0)
     if merge_strategy == "balanced":
         added_depth = int(math.ceil(math.log2(total_chunks))) if total_chunks > 1 else 0
     elif merge_strategy == "chain":
         added_depth = merges
     else:
-        added_depth = 0  # "none"
+        added_depth = 0
 
-    # add synthetic inter-segment relations (joint, NN) → k-1
     if merges > 0:
         merged_relation_counts[link_label] += merges
         merged_nuclearity_patterns[link_nuclearity] += merges
@@ -182,14 +225,35 @@ def extract_all_rst_features(parsed_corpus: list[list]):
 
         if len(per_seg_feats) == 1:
             all_features.append(per_seg_feats[0])
-        else:
+        else: # this is for the legacy/experimental option and should not trigger under normal/recommended usage
             all_features.append(_merge_rst_features(
                 per_seg_feats,
-                merge_strategy="balanced",   # or "chain" if you prefer worst-case
+                merge_strategy="balanced",
                 link_label="joint",
                 link_nuclearity="NN"
             ))
     all_relations = set(k for item in all_features for k in item["relation_counts"])
     return all_features, all_relations
-        
-# === FOLLOW-UP ===
+
+# =====
+# Public: A helper to count all the instances of a relation in a sub-corpus
+# =====
+def count_relations(sub_corpus_features: List[Dict]
+) -> Tuple[List[Tuple[str, int]], List[Tuple[str, float]]]:
+    """
+    Aggregate relation counts across a slice of feature dicts and
+    return (absolute_counts, proportions), both sorted desc by count.
+    """
+    rel_counter = Counter()
+    for item in sub_corpus_features:
+        rel_counter.update(item.get("relation_counts", {}) or {})
+
+    abs_counts = rel_counter.most_common()  # List[Tuple[rel, count]]
+    total = sum(rel_counter.values())
+
+    if total == 0:
+        proportions = [(rel, 0.0) for rel, _ in abs_counts]
+    else:
+        proportions = [(rel, cnt / total) for rel, cnt in abs_counts]
+
+    return abs_counts, proportions
