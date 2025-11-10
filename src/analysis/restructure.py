@@ -1,8 +1,9 @@
 # restructuredata.py
 from __future__ import annotations
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Iterable
+import pandas as pd
 
-__all__ = ["get_data_vectors"]
+__all__ = ["get_data_vectors", "build_feature_matrix"]
 
 def get_data_vectors(relations_list: List[str], rst_data_subset: List[Dict[str, Any]]) -> Dict[str, List[float]]:
     """
@@ -63,3 +64,47 @@ def get_data_vectors(relations_list: List[str], rst_data_subset: List[Dict[str, 
     data["nucl_SN_relprop"] = _safe_div(sn_counts, rel_totals)
 
     return data
+
+def build_feature_matrix(
+    pos_data: Dict[str, List[float]],
+    neg_data: Dict[str, List[float]],
+    features: Optional[Iterable[str]] = None,   # if None: use all overlapping keys
+    label_col: str = "label",
+    pos_label: int = 1,   # positive → 1
+    neg_label: int = 0,   # negative → 0
+) -> pd.DataFrame:
+    """
+    Create a single DataFrame of features with a numeric label column:
+      1 for positive, 0 for negative.
+    """
+    # 1) decide feature set
+    if features is None:
+        feats = sorted(set(pos_data.keys()) & set(neg_data.keys()))
+    else:
+        feats = [f for f in features if f in pos_data and f in neg_data]
+    if not feats:
+        raise ValueError("No overlapping features to build the matrix from.")
+
+    # 2) sanity: aligned lengths
+    def _check_lengths(d: Dict[str, List[float]]) -> int:
+        k0 = feats[0]; n = len(d[k0])
+        for f in feats:
+            if len(d[f]) != n:
+                raise ValueError(f"Feature '{f}' len={len(d[f])} != '{k0}' len={n}.")
+        return n
+    _check_lengths(pos_data)
+    _check_lengths(neg_data)
+
+    # 3) build per-group frames
+    df_pos = pd.DataFrame({f: pos_data[f] for f in feats})
+    df_pos[label_col] = pos_label
+
+    df_neg = pd.DataFrame({f: neg_data[f] for f in feats})
+    df_neg[label_col] = neg_label
+
+    # 4) concat
+    df = pd.concat([df_pos, df_neg], ignore_index=True)
+
+    # (optional) put label last
+    cols = [c for c in df.columns if c != label_col] + [label_col]
+    return df[cols]
