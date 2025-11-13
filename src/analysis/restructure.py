@@ -2,8 +2,7 @@
 from __future__ import annotations
 from typing import List, Dict, Any, Optional, Iterable
 import pandas as pd
-
-__all__ = ["get_data_vectors", "build_feature_matrix"]
+import numpy as np
 
 def get_data_vectors(relations_list: List[str], rst_data_subset: List[Dict[str, Any]]) -> Dict[str, List[float]]:
     """
@@ -108,3 +107,92 @@ def build_feature_matrix(
     # (optional) put label last
     cols = [c for c in df.columns if c != label_col] + [label_col]
     return df[cols]
+
+# ------------------------------------------------------------
+# Extra RST-aware features computed from raw rst_data list
+# ------------------------------------------------------------
+def _entropy_from_props(p: Dict[str, float]) -> float:
+    vals = np.array([v for v in p.values() if v > 0.0], dtype=float)
+    if vals.size == 0:
+        return 0.0
+    return float(-(vals * np.log(vals)).sum())
+
+def _top2_dom_from_props(p: Dict[str, float]) -> float:
+    if not p:
+        return 0.0
+    arr = np.sort(np.array(list(p.values()), dtype=float))[::-1]
+    if arr.size == 1:
+        return float(arr[0])  # only one relation present
+    return float(arr[0] - arr[1])
+
+def extra_rst_features_from_raw(rst_data: List[dict]) -> pd.DataFrame:
+    """
+    rst_data: list of per-document dicts you already produce:
+      { 'tree_depth', 'num_edus', 'relation_proportions', 'edus', ... }
+
+    Returns a DataFrame with:
+      depth_per_edu, rel_entropy, rel_top2_dom,
+      edu_len_mean, edu_len_std, edu_len_p90
+    """
+    rows = []
+    for d in rst_data:
+        depth = float(d.get("tree_depth", 0.0))
+        n_edus = max(1.0, float(d.get("num_edus", 1.0)))  # avoid /0
+        props = d.get("relation_proportions", {}) or {}
+        edus  = d.get("edus", []) or []
+
+        # depth per EDU
+        depth_per_edu = depth / n_edus
+
+        # relation entropy & dominance
+        rel_entropy  = _entropy_from_props(props)
+        rel_top2_dom = _top2_dom_from_props(props)
+
+        # EDU length stats (chars)
+        lengths = np.array([len(e.strip()) for e in edus if isinstance(e, str)], dtype=float)
+        if lengths.size == 0:
+            edu_len_mean = edu_len_std = edu_len_p90 = 0.0
+        else:
+            edu_len_mean = float(lengths.mean())
+            edu_len_std  = float(lengths.std(ddof=0))
+            edu_len_p90  = float(np.percentile(lengths, 90))
+
+        rows.append({
+            "depth_per_edu": depth_per_edu,
+            "rel_entropy": rel_entropy,
+            "rel_top2_dom": rel_top2_dom,
+            "edu_len_mean": edu_len_mean,
+            "edu_len_std": edu_len_std,
+            "edu_len_p90": edu_len_p90,
+        })
+    return pd.DataFrame(rows)
+
+# ------------------------------------------------------------
+# Collapse rare relations in Xy feature matrix
+# ------------------------------------------------------------
+def collapse_rare_relations_df(
+    Xy: pd.DataFrame,
+    relation_cols: List[str],
+    *,
+    avg_prop_min: float = 0.01,   # drop relations with mean proportion < 1%
+    other_col: str = "rel_OTHER"
+) -> pd.DataFrame:
+    """
+    Takes your wide matrix (relations as proportion columns) and:
+      - identifies rare relation columns (mean < threshold)
+      - sums them into one 'other' column
+      - drops the rare columns
+    """
+    Xy = Xy.copy()
+    if not relation_cols:
+        return Xy
+
+    means = Xy[relation_cols].mean(axis=0)
+    rare  = means.index[means < avg_prop_min].tolist()
+    keep  = [c for c in relation_cols if c not in rare]
+
+    if rare:
+        Xy[other_col] = Xy.get(other_col, 0.0) + Xy[rare].sum(axis=1)
+        Xy = Xy.drop(columns=rare)
+
+    return Xy

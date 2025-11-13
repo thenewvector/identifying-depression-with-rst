@@ -1,63 +1,59 @@
 # Identifying Depression in Essays via RST Features
 
 ## Project Overview
+
 ### Scope and Objectives
-This project explores whether features derived from Rhetorical Structure Theory (RST) parsing can help distinguish essays written by individuals diagnosed with depression from those written by non-depressed controls.
+This project explores whether features derived from Rhetorical Structure Theory (RST) parsing can help distinguish essays (and, later, other discourse) written by individuals diagnosed with depression from those written by non-depressed controls.
 
-The central hypothesis is twofold:
-1.	RST-level features — such as the distribution of rhetorical relations, the directionality of nucleus–satellite links, and the density/number of elementary discourse units (EDUs) — may carry diagnostic signal beyond surface lexical features.
-2.	Hybrid modeling — combining RST-based discourse features with more conventional linguistic features (lexical, syntactic, semantic) — may improve the reliability of classification and provide richer insight into how depressive language differs in its discourse organization, not only in its vocabulary or style.
+There are two hypotheses:
+	1.	H1 (primary): RST-level features — e.g., the distribution of rhetorical relations, the directionality of nucleus–satellite links, and the density/number of elementary discourse units (EDUs) — may carry diagnostic signal beyond surface lexical features. This area appears somewhat under-explored.
+	2.	H2 (secondary): Hybrid modeling — combining RST-based discourse features with more conventional linguistic features (lexical, syntactic, semantic) — may improve classification and provide insight into how depressive language differs in discourse organization, not only in vocabulary or style. This has been attempted (e.g., [this study](https://ieeexplore.ieee.org/abstract/document/10600701)); however, semantic features seem to contributed most of "the lift".
 
-Ultimately, the goal is to evaluate whether discourse-level features extracted from RST parsers can meaningfully be used on their own and/or to augment standard NLP pipelines for mental health detection.
+Goal: evaluate whether discourse-level features from RST parsers are useful on their own and/or as augmentations to standard NLP pipelines for mental-health detection.
 
-The dataset used in this iteration of the project is a closed, annotated corpus of essays in Russian. Due to licensing and confidentiality constraints, the data is not distributed with this repository.
+Data. The dataset used here is a closed, annotated corpus of Russian essays. Due to licensing and confidentiality, the data is not distributed with this repository.
 
-### Cliff Notes: What is RST?
-Rhetorical Structure Theory (RST) is a framework from discourse linguistics that models how parts of a text relate to one another.
+### Quick Primer: What is RST?
+RST models how parts of a text relate to one another.
+* EDUs: minimal spans (often clauses) identified by an RST parser.
+* Relations: links between EDUs/spans (e.g., Elaboration, Contrast, Cause).
+* Nucleus–Satellite: the nucleus carries central meaning; the satellite supports/modifies it.
+* Tree structure: relations compose recursively into a discourse tree for the whole text.
 
-Key ideas:
-* Elementary Discourse Units (EDUs): the minimal spans of text (often clauses) identified by an RST parser.
-* Relations: links between EDUs (or groups of EDUs) that capture their rhetorical function — e.g., Elaboration, Contrast, Cause.
-* Nucleus–Satellite distinction: in many relations, one span (the nucleus) carries the central meaning, while the satellite provides supporting or modifying information.
-* Tree structure: The relations combine recursively to form a discourse tree, representing the global organization of the text.
+RST has been used to study coherence, argumentation, and writing quality. Here we test whether structural cues also reveal patterns distinctive of depressive writing.
 
-RST has been used to study coherence, argumentation, and writing quality. Here, we investigate whether its structural cues might also reveal patterns distinctive of depressive writing.
+### The Parser Used
+The project relies on [this RST parser](https://github.com/tchewik/isanlp_rst) (with `gumrrg` and `rstreebank` models).
 
-## What's Been Done
-### Segmentation Phase
-A crucial preprocessing step is segmenting essays into chunks short enough to be processed by BERT-like RST parsers, which typically have a maximum input length of 512 tokens.
+## What’s Been Done
+### H1: Using RST Features (Alone) to Predict Diagnosis
+Preliminary result: on a limited corpus, RST features alone can to some extent predict the diagnosis associated with a text.
 
-Our segmentation pipeline works as follows:
-* Sentence splitting: Text is divided into sentences using either NLTK’s punkt tokenizer or a user-provided splitter.
-* Token budget enforcement: Sentences (and -- potentially -- rare, very long words) are checked against the model’s tokenization budget (512* tokens including the special tokens like CLS and EOF). "Rogue cases" of single sentences that exceed this budget are split.
+### Pipeline (four phases; each in its own notebook under /notebooks/)
+1.	Preprocessing
+    * Load raw CSVs and restructure into a dictionary: `{corpus_name: [doc1, doc2, …]}`.
+	* Extract labels to a parallel dictionary and convert to 0/1 (`0` = negative, `1` = positive).
+	* (Legacy/optional) Segmentation helpers in `src/discourse/segment.py`.
+    * By default, do not segment for RST: the parser handles long texts via a sliding window and builds a single tree per document.
+    * The transformers 512-token warning is expected and benign here.
+2.	RST Parsing
+    * Run each document through [the parser](https://github.com/tchewik/isanlp_rst) and extract features: relation counts/proportions, tree depth, number of EDUs, nuclearity patterns.
+	* Notebook calls functions from `src/discourse/rst.py`.
+	* Split corpora into positive/negative subsets for exploratory summaries (raw and relative relation counts).
+    * Persist all RST outputs under a nested dictionary keyed by corpus name for downstream analysis.
+3.	Brief Statistical Analysis
+    * Reshape features into one vector per document (for stats/ML).
+    * Convert nuclearity counts to proportions.
+    * Run Mann–Whitney U tests with Cliff’s delta to surface potentially meaningful group differences (positive vs negative).
+4.	ML on RST Features
+    * Build an Xy table (features + label).
+    * Baseline runs with L2 and L1 Logistic Regression and HistGradientBoostingClassifier.
+    * Add a few engineered features, then re-run the same pipelines:
+        - `depth_per_edu` = tree_depth / num_edus
+        - `rel_entropy` = -∑ p_i log p_i (relation distribution entropy)
+        - `rel_top2_dom` = p_top1 − p_top2 (dominance gap)
+        - `edu_len_mean`, `edu_len_std`, `edu_len_p90` (EDU length stats via simple tokenization)
 
->\* Update 1: had to bump it down from 512 to a saf*er* 500, because the tokenizer of the RST parser apparently tokenizes differently and some resulting segments, though below the 512 budget with this tokenizer here (from the "sberbank-ai/sbert_large_nlu_ru" model), exceeded the 512 limit downstream when processed by the RST parser.
-
->\* Update 2: had to lower the token bugget a few more times to a safe 320, which results in segments that don't cause the parser downstream to panic (over spans exceeding the 512-token limit)
-
-* Semantic splitting: Longer passages are recursively split at low-similarity valleys (based on sentence embeddings), so that resulting chunks are both under the token limit and semantically coherent.
-* Output: A list of text segments, each safely processable by downstream RST parsers.
-
-This segmentation module is deliberately designed to be robust — capable of handling pathological cases (e.g., URLs, excessively long run-on sentences) — while still aiming to preserve discourse integrity as much as possible.
-
-The implementation is contained in /src/discourse/segment.py, which exposes two public functions:
-* one for initializing the embedding model,
-* another for running texts through the full segmentation pipeline.
-
-Experimentation, configuration, and tweaking are coordinated from /notebooks/segment_documents.ipynb.
-
-#### Future Plans for Segmentation Module
-* Add the option to use the same tokenizer for segmentation that is going to be used for RST parsing downstream in the segmentation phase, so we don't run into the issue of chunks exceeding the capacity of the BERT models under the hood of the RST parser (see above).
-* Semantic sentence splitting: Improve handling of very long sentences by incorporating semantic criteria, rather than the current mechanical approach of chopping at the 512-token boundary (or any other boundary, like the 'safe' 500-token threshold used now).
-* Generality: Extend the module into a more universal semantic segmentation tool, applicable to a wider range of tasks beyond enforcing the a certain token limit.
-* RST-driven segmentation (stretch goal): Explore integration with RST parsers to segment texts at the level of elementary discourse units (EDUs). This would allow more linguistically grounded splitting, where chunk boundaries are guided by rhetorical structure rather than token counts alone.
-
-## Next Steps
-### Working Right Now (in the dev branch)
-- [x] Prep a very basic pipeline (in a notebook) to run RST parsing on (all) the segmented texts in the corpus/corpora. (This is now finally done without the pareser panicking over some segments being over the 512-limit the parser's tokenizer uses; now on to building a complete module for parsing and extracting the relevant RST features for further analysis)
-- [ ] Complete the module extracting all the RST features to be used for analysis downstream (relations, directionality, EDU counts) and run the parser using the public functions of the module.
-- [ ] Extract all the RST features from the essays in the corpus/corpora.
-
-### On the Radar
-* Evaluate predictive power of these features in identifying depressive essays.
-* Combine with traditional linguistic features for joint modeling.
+## Next (Tentatively)
+    * Augment RST with semantic and other linguistic features (e.g., lexical diversity) to test H2 on the current corpus.
+    * Test both hypotheses on a larger, web-collected corpus.
