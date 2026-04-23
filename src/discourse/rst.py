@@ -1,45 +1,24 @@
 # === Imports & Constants ===
-import math
-import warnings
 from collections import Counter
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Tuple
+import re
+import unicodedata
 
 _PARSER = None
 
+
 # === PARSING ===
 
-# === Require pareser ===
 def _require_parser() -> None:
     if _PARSER is None:
         raise RuntimeError("Parser not initialized")
 
-# -----------------------
-# Public: init the parser
-# -----------------------
-def init_parser(model: str='tchewik/isanlp_rst_v3', version: str='rstreebank') -> None:
+
+def init_parser(model: str = "tchewik/isanlp_rst_v3", version: str = "rstreebank") -> None:
     global _PARSER
-    
     from isanlp_rst.parser import Parser
     _PARSER = Parser(hf_model_name=model, hf_model_version=version)
 
-
-# === A helper to 'normalize' all documents to be list items (just in case)
-
-# By default, the code expects the text either as one solid chunk or as two or more chunks
-# in case the text has been segmented in the previous phase (segmentation)
-
-def _as_segments(x):
-    # normalize each item in corpus to a list[str] for cases where the structure of the corpus may be like
-    # ["text1", ["seg1_of_text2", "seg2_of_text2"], "text3", ... ]
-    # or to cover the cases of both segmented and non-sgmented documents in a coprus
-    # this is just an extra precaution
-    
-    if isinstance(x, str):
-        return [x]
-    return [s.strip() for s in x if isinstance(s, str) and s.strip()]
-
-# === A helper to 'normalize' the texts just in case
-import re, unicodedata
 
 def _normalize_for_parser(s: str) -> str:
     s = s.replace("\u00A0", " ")        # NBSP -> space
@@ -49,58 +28,61 @@ def _normalize_for_parser(s: str) -> str:
     s = unicodedata.normalize("NFC", s) # canonical compose
     return s.strip()
 
-# ================================
-# Public: run the whole corpus through the rst parser
-# ================================
 
-def parse_corpus(corpus: list) -> tuple[list[list], list[dict]]:
+def parse_corpus(corpus: List[str]) -> Tuple[List[Dict | None], List[Dict]]:
+    """
+    Parse each document in the corpus once, without segmentation.
+    Returns:
+        parsed_corpus: list of parser outputs or None for failed docs
+        errors: list of error dicts
+    """
     _require_parser()
     parsed_corpus, errors = [], []
+
     for di, doc in enumerate(corpus):
-        segments = _as_segments(doc)
-        parsed_segments = []
-        for si, seg in enumerate(segments):
-            try:
-                print(f"processing doc:{di}, segment:{si}", flush=True)
-                parsed_segments.append(_PARSER(_normalize_for_parser(seg)))
-            except Exception as e:
-                errors.append({"doc_index": di, "seg_index": si, "error": str(e)})
-                parsed_segments.append(None)
-        parsed_corpus.append(parsed_segments)
+        try:
+            print(f"processing doc:{di}", flush=True)
+            parsed_corpus.append(_PARSER(_normalize_for_parser(doc)))
+        except Exception as e:
+            errors.append({"doc_index": di, "error": str(e)})
+            parsed_corpus.append(None)
+
     return parsed_corpus, errors
 
-# === EXTRACTION ====
 
-# === Basic helper to extract EDUs ===
+# === EXTRACTION ===
+
 def _extract_edus(node):
-    # leaf?
-    if getattr(node, 'left', None) is None and getattr(node, 'right', None) is None:
-        txt = getattr(node, 'text', None)
+    if getattr(node, "left", None) is None and getattr(node, "right", None) is None:
+        txt = getattr(node, "text", None)
         return [txt.strip()] if isinstance(txt, str) and txt.strip() else []
+
     edus = []
-    if getattr(node, 'left', None) is not None:
+    if getattr(node, "left", None) is not None:
         edus += _extract_edus(node.left)
-    if getattr(node, 'right', None) is not None:
+    if getattr(node, "right", None) is not None:
         edus += _extract_edus(node.right)
     return edus
 
-# === Main helper function to extract RST features ===
 
 def _extract_rst_features(tree):
     relation_counter = Counter()
     nuclearity_counter = Counter()
 
     def walk(node):
-        # leaf
-        if getattr(node, 'left', None) is None and getattr(node, 'right', None) is None:
+        if getattr(node, "left", None) is None and getattr(node, "right", None) is None:
             return 1
-        rel = getattr(node, 'relation', None)
-        nuc = getattr(node, 'nuclearity', None)
-        if rel: relation_counter[rel] += 1
-        if nuc: nuclearity_counter[nuc] += 1
 
-        ld = walk(node.left)  if getattr(node, 'left',  None) is not None else 0
-        rd = walk(node.right) if getattr(node, 'right', None) is not None else 0
+        rel = getattr(node, "relation", None)
+        nuc = getattr(node, "nuclearity", None)
+
+        if rel:
+            relation_counter[rel] += 1
+        if nuc:
+            nuclearity_counter[nuc] += 1
+
+        ld = walk(node.left) if getattr(node, "left", None) is not None else 0
+        rd = walk(node.right) if getattr(node, "right", None) is not None else 0
         return max(ld, rd) + 1
 
     tree_depth = walk(tree)
@@ -110,145 +92,39 @@ def _extract_rst_features(tree):
     relation_proportions = {k: v / total_rel for k, v in relation_counter.items()} if total_rel else {}
 
     return {
-        'tree_depth': tree_depth,
-        'num_edus': num_edus,
-        'relation_counts': dict(relation_counter),
-        'relation_proportions': relation_proportions,
-        'nuclearity_patterns': dict(nuclearity_counter),
-        'edus': edus,
+        "tree_depth": tree_depth,
+        "num_edus": num_edus,
+        "relation_counts": dict(relation_counter),
+        "relation_proportions": relation_proportions,
+        "nuclearity_patterns": dict(nuclearity_counter),
+        "edus": edus,
     }
 
-# === A helper function to merge all the features for the texts in case these have been segmented
-# === This is a jerry-rigged solution, as it were, whereby the relation between the segments is *assumed* to be "joint" and NN
-def _merge_rst_features(
-    feature_list: List[Dict[str, Any]],
-    *,
-    merge_strategy: str = "balanced",
-    link_label: str = "joint",
-    link_nuclearity: str = "NN"
-):
+
+def extract_all_rst_features(parsed_corpus: List[Dict | None]):
     """
-    LEGACY / EXPERIMENTAL — DO NOT USE with the official IsaNLP RST parser in normal mode.
-
-    The IsaNLP RST parser is designed to return ONE full-document tree per document
-    (it handles long texts internally via sliding windows). If you parsed a document
-    correctly, you should NOT need to “merge” segment trees.
-
-    This helper exists ONLY for legacy scenarios where a document was *incorrectly*
-    split and parsed segment-by-segment. It stitches per-segment feature dicts by:
-      - Summing relation / nuclearity counts;
-      - Adding (k-1) synthetic inter-segment relations (default: link_label='joint', NN);
-      - Approximating depth growth: 
-          * 'balanced'  -> added_depth = ceil(log2(k))
-          * 'chain'     -> added_depth = k - 1
-          * 'none'      -> added_depth = 0
-
-    ⚠️ The added 'joint/NN' relations and depth adjustments are synthetic assumptions.
-       Use ONLY for quick diagnostics; NOT for training, publication, or final analysis.
-
-    Parameters
-    ----------
-    feature_list : list of per-segment feature dicts (from _extract_rst_features)
-    merge_strategy : 'balanced' | 'chain' | 'none'
-    link_label : label to count for synthetic inter-segment links
-    link_nuclearity : nuclearity to count for synthetic inter-segment links
-
-    Returns
-    -------
-    dict : merged feature dict (approximate).
+    Extract one feature dict per parsed document.
     """
-    k = len(feature_list)
-    if k > 1:
-        warnings.warn(
-            "Using _merge_rst_features on multiple segments: this creates synthetic "
-            f"'{link_label}/{link_nuclearity}' links and approximate depth. Prefer parsing "
-            "the whole document once with the official parser.", UserWarning
-        )
-
-    total_chunks = k
-    merged_relation_counts = Counter()
-    merged_nuclearity_patterns = Counter()
-    max_depth = 0
-    total_edus = 0
-    all_edus = []
-
-    for f in feature_list:
-        merged_relation_counts += Counter(f['relation_counts'])
-        merged_nuclearity_patterns += Counter(f['nuclearity_patterns'])
-        max_depth = max(max_depth, f['tree_depth'])
-        total_edus += f['num_edus']
-        all_edus.extend(f['edus'])
-
-    merges = max(total_chunks - 1, 0)
-    if merge_strategy == "balanced":
-        added_depth = int(math.ceil(math.log2(total_chunks))) if total_chunks > 1 else 0
-    elif merge_strategy == "chain":
-        added_depth = merges
-    else:
-        added_depth = 0
-
-    if merges > 0:
-        merged_relation_counts[link_label] += merges
-        merged_nuclearity_patterns[link_nuclearity] += merges
-
-    total_rel = sum(merged_relation_counts.values())
-    relation_proportions = {k: v / total_rel for k, v in merged_relation_counts.items()} if total_rel else {}
-
-    return {
-        'tree_depth': max_depth + added_depth,
-        'num_edus': total_edus,
-        'relation_counts': dict(merged_relation_counts),
-        'relation_proportions': relation_proportions,
-        'nuclearity_patterns': dict(merged_nuclearity_patterns),
-        'edus': all_edus,
-    }
-
-# -----------------------
-# Public: Main Pipline function
-# to process the whole corpus and extract all the features
-# -----------------------
-
-def extract_all_rst_features(parsed_corpus: list[list]):
-    
     all_features = []
 
     for doc in parsed_corpus:
-        # doc is always a list of segment results (even if len==1)
-        seg_results = [seg for seg in doc if isinstance(seg, dict) and seg.get('rst')]
-        if not seg_results:
-            continue  # or append a sentinel
+        if not isinstance(doc, dict) or not doc.get("rst"):
+            continue
 
-        per_seg_feats = []
-        for seg in seg_results:
-            tree = seg['rst'][0]
-            per_seg_feats.append(_extract_rst_features(tree))
+        tree = doc["rst"][0]
+        all_features.append(_extract_rst_features(tree))
 
-        if len(per_seg_feats) == 1:
-            all_features.append(per_seg_feats[0])
-        else: # this is for the legacy/experimental option and should not trigger under normal/recommended usage
-            all_features.append(_merge_rst_features(
-                per_seg_feats,
-                merge_strategy="balanced",
-                link_label="joint",
-                link_nuclearity="NN"
-            ))
     all_relations = set(k for item in all_features for k in item["relation_counts"])
     return all_features, all_relations
 
-# =====
-# Public: A helper to count all the instances of a relation in a sub-corpus
-# =====
-def count_relations(sub_corpus_features: List[Dict]
-) -> Tuple[List[Tuple[str, int]], List[Tuple[str, float]]]:
-    """
-    Aggregate relation counts across a slice of feature dicts and
-    return (absolute_counts, proportions), both sorted desc by count.
-    """
+
+def count_relations(sub_corpus_features: List[Dict]) -> Tuple[List[Tuple[str, int]], List[Tuple[str, float]]]:
     rel_counter = Counter()
+
     for item in sub_corpus_features:
         rel_counter.update(item.get("relation_counts", {}) or {})
 
-    abs_counts = rel_counter.most_common()  # List[Tuple[rel, count]]
+    abs_counts = rel_counter.most_common()
     total = sum(rel_counter.values())
 
     if total == 0:
