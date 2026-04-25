@@ -35,10 +35,6 @@ Preliminary result: on a limited corpus, RST features alone can to some extent p
 	* Extract labels to a parallel dictionary and convert to 0/1 (`0` = negative, `1` = positive).
 2.	RST Parsing
     * Run each document through [the parser](https://github.com/tchewik/isanlp_rst) and extract features: relation counts/proportions, tree depth, number of EDUs, nuclearity patterns.
-
-    > *NB: The parser handles long texts via a sliding window and builds a single tree per document.*
-    > *NB: The transformers 512-token warning is expected and benign here.*
-
 	* Notebook calls functions from `src/discourse/rst.py`.
 	* Split corpora into positive/negative subsets for exploratory summaries (raw and relative relation counts).
     * Persist all RST outputs under a nested dictionary keyed by corpus name for downstream analysis.
