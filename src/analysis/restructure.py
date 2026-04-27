@@ -1,4 +1,4 @@
-# restructuredata.py
+# restructure.py
 from __future__ import annotations
 from typing import List, Dict, Any, Optional, Iterable
 import pandas as pd
