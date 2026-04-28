@@ -23,13 +23,17 @@ def init_parser(model: str = "tchewik/isanlp_rst_v3",
 
 
 def _normalize_for_parser(s: str) -> str:
-    s = s.replace("\u00A0", " ")        # NBSP -> space
-    s = s.replace("\u200b", "")         # zero-width space
-    s = s.replace("\ufeff", "")         # BOM
-    s = re.sub(r"\r\n?", "\n", s)       # CRLF/CR -> LF
-    s = unicodedata.normalize("NFC", s) # canonical compose
+    s = s.replace("\u00A0", " ")
+    s = s.replace("\u200b", "")
+    s = s.replace("\ufeff", "")
+    s = s.replace("…", "...")
+    s = s.replace("—", " - ")
+    s = s.replace("–", " - ")
+    s = s.replace("−", " - ")
+#    s = re.sub(r"(?<=\w)-(?=\w)", " - ", s)   # word-word hyphen boundary
+    s = re.sub(r"\r\n?", "\n", s)
+    s = unicodedata.normalize("NFC", s)
     return s.strip()
-
 
 def parse_corpus(corpus: List[str]) -> Tuple[List[Dict | None], List[Dict]]:
     """
