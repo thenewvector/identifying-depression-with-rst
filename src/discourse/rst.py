@@ -30,31 +30,17 @@ def _normalize_for_parser(s: str) -> str:
     s = s.replace("—", " - ")
     s = s.replace("–", " - ")
     s = s.replace("−", " - ")
-#    s = re.sub(r"(?<=\w)-(?=\w)", " - ", s)   # word-word hyphen boundary
+    s = re.sub(r"(?<=\w)-(?=\w)", " - ", s)
     s = re.sub(r"\r\n?", "\n", s)
     s = unicodedata.normalize("NFC", s)
     return s.strip()
 
-def parse_corpus(corpus: List[str]) -> Tuple[List[Dict | None], List[Dict]]:
-    """
-    Parse each document in the corpus once, without segmentation.
-    Returns:
-        parsed_corpus: list of parser outputs or None for failed docs
-        errors: list of error dicts
-    """
+def parse_document(document: str, normalize: bool = True) -> Dict:
     _require_parser()
-    parsed_corpus, errors = [], []
 
-    for di, doc in enumerate(corpus):
-        try:
-            print(f"processing doc:{di}", flush=True)
-            parsed_corpus.append(_PARSER(_normalize_for_parser(doc)))
-        except Exception as e:
-            errors.append({"doc_index": di, "error": str(e)})
-            parsed_corpus.append(None)
-
-    return parsed_corpus, errors
-
+    if normalize:
+        document = _normalize_for_parser(document)
+    return _PARSER(document)
 
 # === EXTRACTION ===
 
@@ -107,21 +93,25 @@ def _extract_rst_features(tree):
     }
 
 
-def extract_all_rst_features(parsed_corpus: List[Dict | None]):
-    """
-    Extract one feature dict per parsed document.
-    """
-    all_features = []
+def extract_all_rst_features(parsed_corpus: Dict):
+   
+    all_features = {}
 
-    for doc in parsed_corpus:
-        if not isinstance(doc, dict) or not doc.get("rst"):
+    for doc_id, doc_data in parsed_corpus.items():
+        if not isinstance(doc_data["parser_output"], dict) or not doc_data["parser_output"].get("rst"):
             continue
 
-        tree = doc["rst"][0]
-        all_features.append(_extract_rst_features(tree))
+        tree = doc_data["parser_output"]["rst"][0]
+        all_features[doc_id] = {
+            "rst_features": _extract_rst_features(tree),
+            "ds": doc_data["ds"]
+                                }
 
-    all_relations = set(k for item in all_features for k in item["relation_counts"])
-    return all_features, all_relations
+    all_relations = set()
+    for doc_id, doc_data in all_features.items():
+        all_relations.update(doc_data["rst_features"]["relation_counts"].keys())
+
+    return all_features, set(all_relations)
 
 
 def count_relations(sub_corpus_features: List[Dict]) -> Tuple[List[Tuple[str, int]], List[Tuple[str, float]]]:
