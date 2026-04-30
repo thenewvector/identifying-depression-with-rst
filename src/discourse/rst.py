@@ -1,6 +1,6 @@
 # === Imports & Constants ===
 from collections import Counter
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Set, Any
 import re
 import unicodedata
 
@@ -36,6 +36,19 @@ def _normalize_for_parser(s: str) -> str:
     return s.strip()
 
 def parse_document(document: str, normalize: bool = True) -> Dict:
+    """
+    Parses a SINGLE document text using the RST parser.
+
+    Args:
+        document: The raw text string to be parsed.
+        normalize: If True, cleans the text before parsing. This standardizes 
+            whitespace, normalizes dashes and ellipses, fixes line breaks, 
+            and applies Unicode NFC normalization.
+
+    Returns:
+        A dictionary containing the parsed RST tree and related metadata.
+    """
+
     _require_parser()
 
     if normalize:
@@ -93,7 +106,35 @@ def _extract_rst_features(tree):
     }
 
 
-def extract_all_rst_features(parsed_corpus: Dict):
+def extract_all_rst_features(parsed_corpus: Dict[str, Dict[str, Any]]) -> Tuple[Dict[str, Dict[str, Any]], Set[str]]:
+    """
+    Extracts RST features and aggregates all unique relations across a parsed corpus.
+
+    Args:
+        parsed_corpus: A nested dictionary containing parser outputs and diagnoses.
+
+    Returns:
+        A tuple of (all_features, all_relations).
+        
+        all_features structure:
+        {
+            "doc_id": {
+                "rst_features": {
+                    "tree_depth": int,
+                    "num_edus": int,
+                    "relation_counts": dict,
+                    "relation_proportions": dict,
+                    "nuclearity_patterns": dict,
+                    "edus": list
+                },
+                "ds": str,       # Text diagnosis (e.g., 'депрессия')
+                "ds_num": int    # Numeric diagnosis (e.g., 1)
+            }
+        }
+        
+        all_relations structure:
+        A set of all unique RST relations found across the entire corpus.
+    """
    
     all_features = {}
 
@@ -104,21 +145,25 @@ def extract_all_rst_features(parsed_corpus: Dict):
         tree = doc_data["parser_output"]["rst"][0]
         all_features[doc_id] = {
             "rst_features": _extract_rst_features(tree),
-            "ds": doc_data["ds"]
+            "ds": doc_data["ds"],
+            "ds_num": doc_data["ds_num"]
                                 }
 
     all_relations = set()
     for doc_id, doc_data in all_features.items():
         all_relations.update(doc_data["rst_features"]["relation_counts"].keys())
 
-    return all_features, set(all_relations)
+    return all_features, all_relations
 
 
-def count_relations(sub_corpus_features: List[Dict]) -> Tuple[List[Tuple[str, int]], List[Tuple[str, float]]]:
+def count_relations(sub_corpus_features: Dict[str, Dict[str, Any]]) -> Tuple[List[Tuple[str, int]], List[Tuple[str, float]]]:
     rel_counter = Counter()
 
-    for item in sub_corpus_features:
-        rel_counter.update(item.get("relation_counts", {}) or {})
+    for doc_data in sub_corpus_features.values():
+        doc_rst = doc_data.get("rst_features", {})
+        doc_rels = doc_rst.get("relation_counts", {})
+    
+        rel_counter.update(doc_rels)
 
     abs_counts = rel_counter.most_common()
     total = sum(rel_counter.values())
