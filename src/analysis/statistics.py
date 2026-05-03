@@ -1,6 +1,7 @@
 # statistics.py
 from __future__ import annotations
-from typing import Dict, List, Iterable, Optional
+
+from typing import Dict, List, Iterable, Optional, Any
 import numpy as np
 import pandas as pd
 from scipy.stats import mannwhitneyu, iqr
@@ -15,18 +16,25 @@ except Exception:
         """
         Minimal fallback (O(n*m)). Returns (delta, magnitude_str='n/a').
         """
-        x = list(x); y = list(y)
+        x = list(x)
+        y = list(y)
         gt = lt = 0
         for xi in x:
             for yi in y:
-                if xi > yi: gt += 1
-                elif xi < yi: lt += 1
+                if xi > yi:
+                    gt += 1
+                elif xi < yi:
+                    lt += 1
         n = len(x) * len(y)
         delta = (gt - lt) / n if n else 0.0
         return float(delta), "n/a"
 
 
-def _is_numeric_list(v) -> bool:
+def _is_numeric_list(v: Any) -> bool:
+    """
+    Return True if v looks like a list/tuple of numeric values
+    (or an empty list/tuple).
+    """
     if not isinstance(v, (list, tuple)):
         return False
     if not v:
@@ -39,10 +47,10 @@ def _is_numeric_list(v) -> bool:
 
 
 def test_features(
-    positive: Dict[str, List[float]],
-    negative: Dict[str, List[float]],
+    positive: Dict[str, List[Any]],
+    negative: Dict[str, List[Any]],
     features: Optional[Iterable[str]] = None,   # if None: test all overlapping numeric keys
-    exclude: Optional[Iterable[str]] = None,    # keys to skip
+    exclude: Optional[Iterable[str]] = None,    # extra keys to skip
     correction: Optional[str] = "fdr_bh",       # "fdr_bh", "bonferroni", or None
     alpha: float = 0.05,
     decimals: int = 3,
@@ -54,14 +62,14 @@ def test_features(
 
     Parameters
     ----------
-    positive : dict[str, list[float]]
+    positive : dict[str, list[Any]]
         Feature columns for the positive class.
-    negative : dict[str, list[float]]
+    negative : dict[str, list[Any]]
         Feature columns for the negative class.
     features : iterable[str] | None
         If provided, test only these keys. Otherwise test all overlapping numeric keys.
     exclude : iterable[str] | None
-        Keys to skip (e.g., identifiers).
+        Extra keys to skip.
     correction : {"fdr_bh","bonferroni",None}
         Multiple-comparison correction method.
     alpha : float
@@ -74,20 +82,30 @@ def test_features(
     Returns
     -------
     pandas.DataFrame
-        One row per tested feature with medians, IQRs, U, raw/adjusted p, Cliff's delta, etc.
+        One row per tested feature with medians, IQRs, U, raw/adjusted p,
+        Cliff's delta, etc.
     """
-    # choose candidate features
+    # --- choose candidate features
     k_pos = set(positive.keys())
     k_neg = set(negative.keys())
 
+    # Metadata / label columns that should never be tested as features
+    default_exclude = {"doc_id", "ds", "ds_num"}
+    user_exclude = set(exclude) if exclude else set()
+    all_exclude = default_exclude | user_exclude
+
     if features is None:
         candidates = k_pos & k_neg
-        candidates = {k for k in candidates if _is_numeric_list(positive[k]) and _is_numeric_list(negative[k])}
     else:
         candidates = set(features) & k_pos & k_neg
 
-    if exclude:
-        candidates -= set(exclude)
+    candidates -= all_exclude
+
+    # Always enforce numeric filtering, even when `features` is provided
+    candidates = {
+        k for k in candidates
+        if _is_numeric_list(positive[k]) and _is_numeric_list(negative[k])
+    }
 
     rows = []
     for feat in sorted(candidates):
@@ -116,31 +134,35 @@ def test_features(
             "Feature": feat,
             "Median_Positive": float(np.median(pos)),
             "Median_Negative": float(np.median(neg)),
-            "IQR_Positive":   float(iqr(pos)) if len(pos) > 1 else 0.0,
-            "IQR_Negative":   float(iqr(neg)) if len(neg) > 1 else 0.0,
-            "Min_Positive":   float(np.min(pos)),
-            "Min_Negative":   float(np.min(neg)),
-            "Max_Positive":   float(np.max(pos)),
-            "Max_Negative":   float(np.max(neg)),
-            "MannWhitney_U":  float(u_stat),
-            "p_raw":          float(p_raw),
-            "Cliffs_Delta":   float(delta),
-            "Effect_Size":    magnitude,
-            "n_pos":          int(len(pos)),
-            "n_neg":          int(len(neg)),
+            "IQR_Positive": float(iqr(pos)) if len(pos) > 1 else 0.0,
+            "IQR_Negative": float(iqr(neg)) if len(neg) > 1 else 0.0,
+            "Min_Positive": float(np.min(pos)),
+            "Min_Negative": float(np.min(neg)),
+            "Max_Positive": float(np.max(pos)),
+            "Max_Negative": float(np.max(neg)),
+            "MannWhitney_U": float(u_stat),
+            "p_raw": float(p_raw),
+            "Cliffs_Delta": float(delta),
+            "Effect_Size": magnitude,
+            "n_pos": int(len(pos)),
+            "n_neg": int(len(neg)),
         })
 
     if not rows:
         return pd.DataFrame(columns=[
-            "Feature","Median_Positive","Median_Negative","IQR_Positive","IQR_Negative",
-            "Min_Positive","Min_Negative","Max_Positive","Max_Negative",
-            "MannWhitney_U","p_raw","p_adj","reject","Cliffs_Delta","Effect_Size",
-            "n_pos","n_neg"
+            "Feature",
+            "Median_Positive", "Median_Negative",
+            "IQR_Positive", "IQR_Negative",
+            "Min_Positive", "Min_Negative",
+            "Max_Positive", "Max_Negative",
+            "MannWhitney_U", "p_raw", "p_adj", "reject",
+            "Cliffs_Delta", "Effect_Size",
+            "n_pos", "n_neg",
         ])
 
     df = pd.DataFrame(rows)
 
-    # multiple-comparison correction
+    # --- multiple-comparison correction
     if correction is not None:
         try:
             from statsmodels.stats.multitest import multipletests
@@ -153,23 +175,31 @@ def test_features(
             else:
                 p_adj = df["p_raw"].values
                 reject = p_adj < alpha
+
         df["p_adj"] = p_adj
         df["reject"] = reject
     else:
         df["p_adj"] = df["p_raw"].values
         df["reject"] = df["p_adj"] < alpha
 
-    # rounding
+    # --- rounding
     num_cols = [
-        "Median_Positive","Median_Negative","IQR_Positive","IQR_Negative",
-        "Min_Positive","Min_Negative","Max_Positive","Max_Negative",
-        "MannWhitney_U","p_raw","p_adj","Cliffs_Delta"
+        "Median_Positive", "Median_Negative",
+        "IQR_Positive", "IQR_Negative",
+        "Min_Positive", "Min_Negative",
+        "Max_Positive", "Max_Negative",
+        "MannWhitney_U", "p_raw", "p_adj", "Cliffs_Delta",
     ]
     for c in num_cols:
         if c in df.columns:
             df[c] = df[c].astype(float).round(decimals)
 
-    # sort by adjusted p then |delta|
+    # --- sort by adjusted p then |delta|
     df["abs_delta"] = df["Cliffs_Delta"].abs()
-    df = df.sort_values(["p_adj", "abs_delta"], ascending=[True, False]).drop(columns=["abs_delta"]).reset_index(drop=True)
+    df = (
+        df.sort_values(["p_adj", "abs_delta"], ascending=[True, False])
+          .drop(columns=["abs_delta"])
+          .reset_index(drop=True)
+    )
+
     return df
