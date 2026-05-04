@@ -55,6 +55,52 @@ def parse_document(document: str, normalize: bool = True) -> Dict:
         document = _normalize_for_parser(document)
     return _PARSER(document)
 
+def parse_corpus(corpus: Dict[str, Dict[str, Any]]) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, str]]]:
+    """
+    Parses each document in the corpus using the RST parser.
+
+    Args:
+        corpus: A dictionary of documents.
+            Expected structure: { "doc_id": {"text": str, "ds": str, "ds_num": int} }
+
+    Returns:
+        A tuple of (parsed_corpus, errors).
+        
+        parsed_corpus structure:
+        {
+            "doc_id": {
+                "parser_output": dict | None,  # The RST tree, or None if parsing failed
+                "ds": str,
+                "ds_num": int
+            }
+        }
+        
+        errors structure:
+        [
+            {"doc_id": str, "error": str}
+        ]
+    """
+    parsed_corpus = {}
+    errors = []
+
+    for doc_id, doc_data in corpus.items():
+        try:
+            print(f"processing: {doc_id}", flush=True)
+            parsed_corpus[doc_id] = {
+                "parser_output": parse_document(doc_data["text"]),
+                "ds": doc_data["ds"],
+                "ds_num": doc_data["ds_num"]
+            }
+        except Exception as e:
+            errors.append({"doc_id": doc_id, "error": str(e)})
+            parsed_corpus[doc_id] = {
+                "parser_output": None,
+                "ds": doc_data["ds"],
+                "ds_num": doc_data["ds_num"]
+            }
+
+    return parsed_corpus, errors
+
 # === EXTRACTION ===
 
 def _extract_edus(node):
