@@ -145,8 +145,15 @@ def build_feature_matrix(
     # 4) concat
     df = pd.concat([df_pos, df_neg], ignore_index=True)
 
-    # (optional) put label last
-    cols = [c for c in df.columns if c != label_col] + [label_col]
+    # put 'label' label and 'meta' labels last (if they have been recieved from upstream)
+    meta = ["doc_id", "ds", "ds_num"]
+    safe_meta = [c for c in meta if c in df.columns]
+    if safe_meta:
+        all_meta = safe_meta + [label_col]
+    else:
+        all_meta = [label_col]
+    cols = [c for c in df.columns if c not in all_meta] + all_meta
+    
     return df[cols]
 
 # ------------------------------------------------------------
