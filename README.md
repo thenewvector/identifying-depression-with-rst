@@ -3,8 +3,8 @@
 > **🚧 Project Status: Active Refactoring (May 2026)**
 > This repository is currently undergoing a refactor to upgrade the pipeline. 
 > 
-> * **Current State:** The preprocessing (`01_preprocessing_documents.ipynb`) and parsing modules (`02_parsing_with_rst.ipynb`, `src/discourse/rst.py`) have been updated to the new standard. 
-> * **Legacy State:** The statistical analysis (`03_`) and ML modeling (`04_`) notebooks still contain legacy code from the previous iteration (late 2025). The pipeline cannot currently be run end-to-end until these notebooks are updated.
+> * **Current State:** The preprocessing (`01_preprocessing_documents.ipynb`), parsing modules (`02_parsing_with_rst.ipynb`, `src/discourse/rst.py`) and statistical analyses (`03_analyzing_stats.ipynb`, `src/analysis/statistics.py`) have been updated to the new standard.
+> * **Legacy State:** The ML modeling (`04_`) notebooks still contain legacy code from the previous iteration (late 2025). The pipeline cannot currently be run end-to-end until these notebooks are updated.
 
 ## Project Overview
 
@@ -54,11 +54,11 @@ Preliminary results (achieved using the legacy version of the pipeline) indicate
     * Generates two separate feature databases (one using the `gumrrg` model and one using `rstreebank`).
     * The output mimics the Phase 1 structure, appending a new feature dictionary to each document: `{"doc-id": {"rst_features": {"tree_depth": int, "num_edus": int, "relation_counts": dict, …}, "ds": str, "ds_num": int}}`.
 
-3.  **Brief Statistical Analysis (🚧 Legacy Code)**
-    * *Note: Currently being updated to handle the new Phase 2 parser output structure.*
+3.  **Brief Statistical Analysis (✅ Refactored)**
     * Reshapes features into one vector per document (for stats/ML).
     * Converts nuclearity counts to proportions.
     * Runs Mann–Whitney U tests with Cliff’s delta to surface potentially meaningful group differences (positive vs. negative).
+    * Added the results of statistical analysis to [reports](https://github.com/thenewvector/identifying-depression-with-rst/tree/main/reports)
 
 4.  **ML on RST Features (🚧 Legacy Code)**
     * *Note: Awaiting the completion of the Phase 3 refactor.*
