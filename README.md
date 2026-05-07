@@ -20,11 +20,13 @@ There are two hypotheses:
 **Data:** The dataset used here is a closed, annotated corpus of Russian essays. Due to licensing and confidentiality, the raw data is not distributed with this repository.
 
 ### Quick Primer: What is RST?
-RST models how parts of a text relate to one another.
+RST (Rhetorical Structure Theory) models how parts of a text relate to one another.
 * **EDUs:** Minimal spans (often clauses) identified by an RST parser.
 * **Relations:** Links between EDUs/spans (e.g., Elaboration, Contrast, Cause).
 * **Nucleus–Satellite:** The nucleus carries central meaning; the satellite supports/modifies it.
 * **Tree structure:** Relations compose recursively into a discourse tree for the whole text.
+
+See a more comprehensive summary of Rhetorical Structure Theory [here](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rhetorical-structure-theory.md).
 
 RST has been used to study coherence, argumentation, and writing quality. Here we test whether structural cues also reveal patterns distinctive of depressive writing.
 
