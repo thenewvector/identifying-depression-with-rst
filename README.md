@@ -65,7 +65,7 @@ Preliminary results (achieved using the legacy version of the pipeline) indicate
 4.  **ML on RST Features (🚧 Legacy Code)**
     * *Note: Being refactored.*
     * Builds an Xy table (features + label).
-    * Runs baselines using L2/L1 Logistic Regression and HistGradientBoostingClassifier.
+    * Runs baselines using L2/L1 Logistic Regression and Histad GradientBoostingClassifier.
     * Engineers additional features and re-evaluates:
         - `depth_per_edu` = tree_depth / num_edus
         - `rel_entropy` = -∑ p_i log p_i (relation distribution entropy)
