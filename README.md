@@ -21,12 +21,12 @@ There are two hypotheses:
 
 ### Quick Primer: What is RST?
 RST (Rhetorical Structure Theory) models how parts of a text relate to one another.
-* **EDUs:** Minimal spans (often clauses) identified by an RST parser.
+* **EDUs:** Minimal spans (often clauses) [identified](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rst/construing-edus-an-sfl-perspective-on-rst-parsing.md) by an RST parser.
 * **Relations:** Links between EDUs/spans (e.g., Elaboration, Contrast, Cause).
 * **Nucleus–Satellite:** The nucleus carries central meaning; the satellite supports/modifies it.
 * **Tree structure:** Relations compose recursively into a discourse tree for the whole text.
 
-See a more comprehensive summary of Rhetorical Structure Theory [here](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rhetorical-structure-theory.md).
+See a more comprehensive summary of Rhetorical Structure Theory [here](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rst/rhetorical-structure-theory.md) and my discussion of An SFL Perspective on RST Parsing [here](An SFL Perspective on RST Parsing).
 
 RST has been used to study coherence, argumentation, and writing quality. Here we test whether structural cues also reveal patterns distinctive of depressive writing.
 
@@ -60,10 +60,10 @@ Preliminary results (achieved using the legacy version of the pipeline) indicate
     * Reshapes features into one vector per document (for stats/ML).
     * Converts nuclearity counts to proportions.
     * Runs Mann–Whitney U tests with Cliff’s delta to surface potentially meaningful group differences (positive vs. negative).
-    * Added the results of statistical analysis to [reports](https://github.com/thenewvector/identifying-depression-with-rst/tree/main/reports)
+    * Adds the results of statistical analysis to [reports](https://github.com/thenewvector/identifying-depression-with-rst/tree/main/reports)
 
 4.  **ML on RST Features (🚧 Legacy Code)**
-    * *Note: Awaiting the completion of the Phase 3 refactor.*
+    * *Note: Being refactored.*
     * Builds an Xy table (features + label).
     * Runs baselines using L2/L1 Logistic Regression and HistGradientBoostingClassifier.
     * Engineers additional features and re-evaluates:
