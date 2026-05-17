@@ -26,7 +26,7 @@ RST (Rhetorical Structure Theory) models how parts of a text relate to one anoth
 * **Nucleus–Satellite:** The nucleus carries central meaning; the satellite supports/modifies it.
 * **Tree structure:** Relations compose recursively into a discourse tree for the whole text.
 
-See a more comprehensive summary of Rhetorical Structure Theory [here](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rst/rhetorical-structure-theory.md) and my discussion of An SFL Perspective on RST Parsing [here](An SFL Perspective on RST Parsing).
+See a more comprehensive summary of Rhetorical Structure Theory [here](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rst/rhetorical-structure-theory.md) and my discussion of An SFL Perspective on RST Parsing [here](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rst/construing-edus-an-sfl-perspective-on-rst-parsing.md).
 
 RST has been used to study coherence, argumentation, and writing quality. Here we test whether structural cues also reveal patterns distinctive of depressive writing.
 
