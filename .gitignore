@@ -12,7 +12,7 @@ venv/
 .jupyter/
 
 # Data / outputs
-data/
+data
 extras/
 temp/
 misc/
