@@ -16,10 +16,22 @@ def _require_parser() -> None:
 
 def init_parser(model: str = "tchewik/isanlp_rst_v3",
                 version: str = "rstreebank",
-                cuda: int = -1) -> None:
+                cuda: int = -1,
+                relinventory: str | None = None) -> None:
+    
     global _PARSER
     from isanlp_rst.parser import Parser
-    _PARSER = Parser(hf_model_name=model, hf_model_version=version, cuda_device=cuda)
+
+    kwargs = {
+        "hf_model_name": model,
+        "hf_model_version": version,
+        "cuda_device": cuda,
+    }
+    
+    if relinventory is not None:
+        kwargs["relinventory"] = relinventory
+
+    _PARSER = Parser(**kwargs)
 
 
 def _normalize_for_parser(s: str) -> str:
