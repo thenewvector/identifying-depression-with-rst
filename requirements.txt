@@ -1,8 +1,19 @@
-# requirements.txt
+# --- Base Data Science & Machine Learning ---
 numpy>=1.26
 scikit-learn>=1.4
+pandas
+matplotlib
+
+# --- Core NLP & Embeddings ---
 transformers>=4.43
 tokenizers>=0.19
 sentence-transformers>=2.7
 nltk>=3.9
-# torch installed via conda or pick the right wheel manually
+
+# --- Custom RST Parsers ---
+git+https://github.com/iinemo/isanlp.git
+isanlp_rst
+
+# --- Statistical Tools ---
+cliffs-delta
+statsmodels
