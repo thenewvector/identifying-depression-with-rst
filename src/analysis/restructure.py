@@ -12,6 +12,7 @@ def get_data_vectors(
     rst_data_subset: Dict[str, Dict[str, Any]],
     abs_nuclearity: bool = False,
     include_meta: bool = True,
+    engineered: bool = True,
 ) -> Dict[str, List[Any]]:
     """
     Build per-document feature columns from an RST feature subset.
@@ -103,6 +104,10 @@ def get_data_vectors(
     data["nucl_NS_relprop"] = _safe_div(ns_counts, nuc_totals)
     data["nucl_SN_relprop"] = _safe_div(sn_counts, nuc_totals)
 
+    if engineered:
+        eng_features = add_engineered_features(rst_data_subset=rst_data_subset)
+        data |= eng_features
+
     return data
 
 def build_feature_matrix(
@@ -173,27 +178,40 @@ def _top2_dom_from_props(p: Dict[str, float]) -> float:
         return float(arr[0])  # only one relation present
     return float(arr[0] - arr[1])
 
-def extra_rst_features_from_raw(rst_data: List[dict]) -> pd.DataFrame:
+def add_engineered_features(rst_data_subset: Dict[str, Dict[str, Any]]) -> Dict[str, List[float]]:
     """
-    rst_data: list of per-document dicts you already produce:
-      { 'tree_depth', 'num_edus', 'relation_proportions', 'edus', ... }
+    Build engineered per-document feature columns from rst_data_subset.
 
-    Returns a DataFrame with:
-      depth_per_edu, rel_entropy, rel_top2_dom,
-      edu_len_mean, edu_len_std, edu_len_p90
+    Returns a column-oriented dict aligned to rst_data_subset order:
+      - depth_per_edu
+      - rel_entropy
+      - rel_top2_dom
+      - edu_len_mean
+      - edu_len_std
+      - edu_len_p90
     """
-    rows = []
-    for d in rst_data:
+    eng_features = {
+        "depth_per_edu": [],
+        "rel_entropy": [],
+        "rel_top2_dom": [],
+        "edu_len_mean": [],
+        "edu_len_std": [],
+        "edu_len_p90": [],
+    }
+
+    for per_doc_data in rst_data_subset.values():
+        d = per_doc_data.get("rst_features", {}) or {}
+
         depth = float(d.get("tree_depth", 0.0))
         n_edus = max(1.0, float(d.get("num_edus", 1.0)))  # avoid /0
         props = d.get("relation_proportions", {}) or {}
-        edus  = d.get("edus", []) or []
+        edus = d.get("edus", []) or []
 
         # depth per EDU
         depth_per_edu = depth / n_edus
 
         # relation entropy & dominance
-        rel_entropy  = _entropy_from_props(props)
+        rel_entropy = _entropy_from_props(props)
         rel_top2_dom = _top2_dom_from_props(props)
 
         # EDU length stats (chars)
@@ -202,18 +220,17 @@ def extra_rst_features_from_raw(rst_data: List[dict]) -> pd.DataFrame:
             edu_len_mean = edu_len_std = edu_len_p90 = 0.0
         else:
             edu_len_mean = float(lengths.mean())
-            edu_len_std  = float(lengths.std(ddof=0))
-            edu_len_p90  = float(np.percentile(lengths, 90))
+            edu_len_std = float(lengths.std(ddof=0))
+            edu_len_p90 = float(np.percentile(lengths, 90))
 
-        rows.append({
-            "depth_per_edu": depth_per_edu,
-            "rel_entropy": rel_entropy,
-            "rel_top2_dom": rel_top2_dom,
-            "edu_len_mean": edu_len_mean,
-            "edu_len_std": edu_len_std,
-            "edu_len_p90": edu_len_p90,
-        })
-    return pd.DataFrame(rows)
+        eng_features["depth_per_edu"].append(depth_per_edu)
+        eng_features["rel_entropy"].append(rel_entropy)
+        eng_features["rel_top2_dom"].append(rel_top2_dom)
+        eng_features["edu_len_mean"].append(edu_len_mean)
+        eng_features["edu_len_std"].append(edu_len_std)
+        eng_features["edu_len_p90"].append(edu_len_p90)
+
+    return eng_features
 
 # ------------------------------------------------------------
 # Collapse rare relations in Xy feature matrix
