@@ -1,6 +1,6 @@
 # Identifying Depression in Essays via RST Features
 
-> **🚧 Project Status: Active Refactoring (June 2026)**
+> **🚧 Project Status: Active Refactoring (August 2026)**
 > This repository is currently undergoing a refactor to upgrade the pipeline. 
 > 
 > * **Current State:** The preprocessing (`01_preprocessing_documents.ipynb`), parsing modules (`02_parsing_with_rst.ipynb`, `src/discourse/rst.py`) and statistical analyses (`03_analyzing_stats.ipynb`, `src/analysis/statistics.py`) have been updated to the new standard.
@@ -64,7 +64,8 @@ Preliminary results (achieved using the legacy version of the pipeline) indicate
 3.  **Brief Statistical Analysis (✅ Refactored)**
     * Reshapes features into one vector per document (for stats/ML).
     * Converts nuclearity counts to proportions.
-    * Runs Mann–Whitney U tests with Cliff’s delta to surface potentially meaningful group differences (positive vs. negative).
+    * Adds "engineered features".
+    * Runs Mann–Whitney U tests with Cliff’s delta on all the features to surface potentially meaningful group differences (positive vs. negative).
     * Adds the results of statistical analysis to [reports](https://github.com/thenewvector/identifying-depression-with-rst/tree/main/reports)
 
 4.  **ML on RST Features (🚧 Legacy Code)**
@@ -87,19 +88,22 @@ Preliminary results (achieved using the legacy version of the pipeline) indicate
 * Based on the preliminary interpretation, more refined variations of H1 and H2 can be put forth for further testing.
     * H1A: The tendencies revealed in the preliminary interpretation (more depth and more pragmatic/"argumentative" relations in group 0 as opposed to less depth and more semantic/sequential logic in group 1) are going to be reflected in the "engineered" features as well. This warrants adding these engineered features earlier in the pipeline, so they can be analyzed simultaneously with all the other features at the stage of statistical analysis.
     * H2A: The tendency towards a more rhetorically involved discourse with group zero may be maintained in the domain of other language features (e.g. lexical diversity).
+* "Engineered features" have been incorporated in the pipeline, so they can be analyzed simultaneously with all the other features at the stage of statistical analysis (`03_analyzing_stats.ipynb`). Updated reports that include these features into stat analysis have been added to [the reports folder](./reports).
+* A detailed quantitative and qualitative analysis of question–response organization is available in the
+[preliminary Solutionhood/topic report](./reports/preliminary-report-solutionhood-topic-depr-rst.md).
 
 ### Next Steps
 
 #### Immediate
 
-* Add/move the incorporation of "engineered features" earlier in the pipeline, so they can be analyzed simultaneously with all the other features at the stage of statistical analysis (`03_analyzing_stats.ipynb`).
 * Since differences are observed between the results of the two models (`gumrrg` and `rstreebank`), a brief theoretical overview of "what goes on under the hood" with these models (how EDUs are segmented, what relation inventories are used, what kind of corpora was used in the training of models) is called for and is going to be published [here](https://github.com/thenewvector/field-notes/blob/main/03-concepts/rst/) when it's ready.
-* The same fact of there being such drastic differences between the results of the two models that have been used so far, necessitates that a third model (`unirst` in conjunction with the GUM inventory of relations) be used, to see if similar differences will be registered using this third model and whether our preliminary interpretation and H1A can be substantiated. 
+* Conduct a qualitative analysis of the diverging rhetorical relations (across both the `rstreebank` and `gumrrg` models) between the positive and control groups. (RRT `Solutionhood` vs RRG `topic` [has been tackled](./reports/preliminary-report-solutionhood-topic-depr-rst.md) so far).
+* ~~The same fact of there being such drastic differences between the results of the two models that have been used so far, necessitates that a third model (`unirst` in conjunction with the GUM inventory of relations) be used, to see if similar differences will be registered using this third model and whether our preliminary interpretation and H1A can be substantiated.~~ 
 
 #### Later
 
 * Augment RST data with semantic and other linguistic features (e.g., lexical diversity) to test H2 (and H2A) on the current corpus.
-* Conduct a qualitative analysis of the diverging rhetorical relations (across both the `rstreebank` and `gumrrg` models) between the positive and control groups. The goal is to determine if these structural differences map to established psychological markers of depression.
+* ~~Conduct a qualitative analysis of the diverging rhetorical relations (across both the `rstreebank` and `gumrrg` models) between the positive and control groups. The goal is to determine if these structural differences map to established psychological markers of depression.~~
 
 #### Tentative
 
