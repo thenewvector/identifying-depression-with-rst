@@ -61,7 +61,7 @@ At a high level, both frameworks agree on the fundamental architecture: the sate
 
 ## Corpus Level Pattern for RRT-derived `Solutionhood`
 
-![[Pasted image 20260725184339.png]]
+![ECDF for Solutionhood](./media/ECDF_for_Solutionhood.png)
 
 The distribution of `Solutionhood` in the RRT-derived trees was strongly zero-inflated in both groups, but substantially more so among the depressed texts. Approximately three quarters of depressed documents contained no `Solutionhood` relations, compared with fewer than half of the healthy documents. Although several depressed texts showed relatively high `Solutionhood` proportions, these represented a small upper-tail subset. The healthy group displayed a broader and generally higher distribution, indicating that Solutionhood was both more frequently present and more extensively represented across healthy texts.
 
@@ -70,7 +70,7 @@ The distribution of `Solutionhood` in the RRT-derived trees was strongly zero-in
 | 0   | Healthy   | 447         | 53.914989   | 46.085011 | 0.016393   | 0.036364            | 0.066667 | 0.193548 |
 | 1   | Depressed | 110         | 24.545455   | 75.454545 | 0.000000   | 0.024390            | 0.027548 | 0.125000 |
 
-**Table 1. Overall Distribution of `Solutionhood` in the RRT-derived Trees
+**Table 1. Overall Distribution of `Solutionhood` in the RRT-derived Trees**
 
 As can be seen from Table 1 above, RRT-derived `Solutionhood` proportions were strongly zero-inflated in both groups, but especially among depressed texts. The relation occurred in 53.9% of healthy documents, compared with only 24.5% of depressed documents; correspondingly, 75.5% of depressed texts contained no `Solutionhood` at all. The median across all documents was therefore zero in the depressed group, compared with 0.016 in the healthy group. The difference was not limited to relation presence: among documents containing at least one `Solutionhood` relation, the median proportion was also higher in healthy texts (0.036 versus 0.024). The upper part of the healthy distribution was likewise broader, with a 90th-percentile value of 0.067 compared with 0.028 in the depressed group. Nevertheless, the distributions overlapped, and a small number of depressed documents reached relatively high values, with a maximum of 0.125. Thus, high `Solutionhood` is not exclusive to healthy texts; rather, it is substantially more widespread and generally more prominent within that group.
 
